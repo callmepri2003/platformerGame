@@ -1,0 +1,38 @@
+name: review-gate
+
+# A single GitHub account owns every agent's commits, and GitHub refuses to let
+# an account approve its own pull request. This check is therefore the team's
+# binding approval mechanism: QA signs off by applying `reviewed:approved`,
+# and branch protection requires this check to pass before merge.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
+
+jobs:
+  gate:
+    name: reviewer sign-off
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check review labels
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          echo "labels: ${LABELS:-<none>}"
+          if [ "$DRAFT" = "true" ]; then
+            echo "::error::PR is a draft; mark it ready for review"; exit 1
+          fi
+          case ",$LABELS," in
+            *,blocked,*)
+              echo "::error::PR carries the 'blocked' label"; exit 1 ;;
+          esac
+          case ",$LABELS," in
+            *,reviewed:approved,*)
+              echo "Reviewer sign-off present."; exit 0 ;;
+            *,reviewed:changes-requested,*)
+              echo "::error::Reviewer requested changes; address them and re-request review"; exit 1 ;;
+          esac
+          echo "::error::Awaiting reviewer sign-off (label 'reviewed:approved')"
+          exit 1

@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  MIN_LINE_COVERAGE: "70"
+
+jobs:
+  build-test:
+    name: build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Verify formatting
+        run: dotnet format --verify-no-changes --no-restore
+
+      - name: Build (warnings are errors)
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test with coverage
+        run: |
+          dotnet test --no-build --configuration Release \
+            --logger "trx;LogFileName=results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory TestResults
+
+      - name: Enforce coverage threshold
+        run: |
+          python3 - "$MIN_LINE_COVERAGE" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          floor = float(sys.argv[1])
+          reports = glob.glob("TestResults/**/coverage.cobertura.xml", recursive=True)
+          if not reports:
+              print("### Coverage: no report produced")
+              sys.exit("::error::no coverage report produced")
+          rate = max(float(ET.parse(r).getroot().get("line-rate", 0)) for r in reports) * 100
+          verdict = "PASS" if rate >= floor else "FAIL"
+          print(f"### Coverage {rate:.1f}% (floor {floor:.0f}%) - {verdict}")
+          if rate < floor:
+              sys.exit(f"::error::line coverage {rate:.1f}% is below the {floor:.0f}% floor")
+          PY
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/
+          retention-days: 7
