@@ -40,14 +40,28 @@ A change is done when **all** of these hold:
 1. Every acceptance criterion on the issue is satisfied.
 2. Unit tests cover the new behaviour including its edge cases, and the whole
    suite passes.
-3. `dotnet build` is clean. Warnings are errors here; do not silence one without
+3. **`Platformer.Core` line coverage is at or above 90%.** CI enforces this and
+   fails `build & test` below the floor, so a change can satisfy every other
+   item on this list and still go red — which is why it is written here. The
+   number lives in `MIN_CORE_LINE_COVERAGE` in `.github/workflows/ci.yml`.
+   The floor is scoped to `Platformer.Core` alone. `Platformer.Desktop` is
+   excluded from measurement because it is a thin Raylib adapter that cannot run
+   headless, so measuring it would make the number describe the size of the
+   renderer rather than the quality of the testing. That exclusion is not
+   somewhere to hide logic: anything with behaviour worth testing belongs in a
+   type a test can reach, and it will be measured there. The reasoning is in
+   `coverlet.runsettings`.
+4. `dotnet build` is clean. Warnings are errors here; do not silence one without
    justifying it in the PR.
-4. `dotnet format --verify-no-changes` passes.
-5. `Platformer.Core` still has **no** dependency on Raylib, windowing, or
+5. `dotnet format --verify-no-changes` passes.
+6. `Platformer.Core` still has **no** dependency on Raylib, windowing, or
    rendering. The simulation must remain runnable headless in tests. This is the
    single most important architectural rule in the project.
-6. Public types and members carry XML doc comments.
-7. CI is green and a reviewer has signed off.
+7. Public types and members carry XML doc comments.
+8. CI is green and a reviewer has signed off.
+
+Where an item genuinely cannot apply to a change, say `n/a` and why. An honest
+`n/a` is a complete answer; a ticked box that is not true is not.
 
 ## Branch and commit conventions
 

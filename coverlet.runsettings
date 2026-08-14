@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Coverage is measured over Platformer.Core only, and the CI floor is scoped to
+  it.
+
+  Platformer.Desktop is deliberately excluded. It is a thin adapter over Raylib:
+  a window, a render loop and key bindings. It cannot run headless, so it cannot
+  be exercised in CI, and including it would mean the coverage number stopped
+  describing anything real - it would drift down as the renderer grew and up as
+  it shrank, regardless of how well the game was tested. The simulation is the
+  part of this project that has to be correct, and it is headless by design, so
+  it is the part worth putting a floor under.
+
+  The Include filter is an exact assembly-name match, and deliberately so. If the
+  simulation is ever split across a second assembly, that assembly is silently
+  unmeasured until it is added here - a real assumption, recorded so it is not a
+  surprise. Widening to [Platformer.Core*]* would NOT be the fix: it would also
+  match Platformer.Core.Tests and start measuring the test assembly against its
+  own floor, which inflates the number with code that is tautologically covered.
+  Prefer adding the new assembly by name.
+
+  This is not a licence to hide logic in Platformer.Desktop. Anything with
+  behaviour worth testing - see the camera in #10, which is required to be a
+  testable type with no Raylib dependency - belongs in a type that tests can
+  reach, and it will be measured there.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[Platformer.Core]*</Include>
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
