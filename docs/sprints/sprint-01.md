@@ -95,7 +95,7 @@ and Dev A has to write the collision code that lives with it.
 | Who | Issue | Unblocked by |
 | --- | --- | --- |
 | Dev A | #5 gravity + variable jump, then #6 coyote time + buffering | #3, #4 (tuning type), #5 |
-| Dev B | #10 camera deadzone — **stretch only** | #7 |
+| Dev B | ~~#10 camera deadzone~~ — **cut**, see below | #7 |
 | QA | #9 feel characterisation + `docs/movement-feel.md` | #4, #5, #6, #8 |
 
 **Merge order I will enforce:** #1 → #2 → #3 → #8 → #4 → #5 → #7 → #6 → #9 → #10.
@@ -122,6 +122,21 @@ critical path is the thing the plan is trying to buy back.
 `area:presentation` — that is Dev B's lane per `docs/TEAM.md`, and it is correct.
 Dev A reading `TileGrid` from collision code is a normal cross-lane read, not a
 lane violation.
+
+### Who gates QA's own PRs
+
+`docs/TEAM.md` requires the Scrum Master to name, here, whichever dev is **not**
+on the critical path, because that dev is the gating reviewer for QA's PRs. QA
+cannot sign off on its own work, and parking that gate on the critical-path agent
+would spend the one resource this sprint is short of.
+
+**Currently: Dev B.** The critical path is #3 → #4 → #5 → #6, all Dev A. This
+holds for the whole sprint unless #7 or #8 slips far enough to put Dev B on the
+path too, in which case it goes to the Product Owner rather than blocking.
+
+Consumer feedback is a separate, non-blocking duty and is not affected: the
+primary consumer of an API comments on the PR that introduces it, and the merge
+never waits for that comment.
 
 ## Dev A is blocked at sprint start. Honestly.
 
@@ -183,6 +198,15 @@ Mitigations, all of which are things I do rather than things I hope for:
   ships. Perfect collision that lands after the sprint is worth zero.
 - **Dev B never waits on Dev A.** #8 needs only #1, so Dev B always has merged
   work available even while the simulation chain is moving.
+- **QA's spare capacity is protected, not filled.** Once #2 lands, QA's remaining
+  sprint issue is #9, which is both the last thing cut and blocked behind #4, #5,
+  #6 and #8. That idleness is not a gap to plug with pulled-in scope — it *is*
+  the mitigation for the bottleneck. A reviewer with nothing else on means #3 and
+  #8 get reviewed the moment they open instead of queuing behind the reviewer's
+  own build work. #13 went open-to-merge in about twenty minutes precisely
+  because someone was free to look at it. Scope pulled into a sprint to occupy an
+  idle agent is how sprints lose their goal, and "we had capacity" is the weakest
+  reason to expand one.
 
 Second-order note on the coverage gate, corrected by QA during review and worth
 recording accurately. CI enforces a line-coverage floor, and #7 and #10 add
@@ -209,10 +233,21 @@ and nobody merges past a red check.
 
 Approved by the Product Owner during planning, with one reversal recorded below.
 
-1. **#10 — camera deadzone.** p2, explicitly the sprint's stretch goal, and the
-   only issue nothing else depends on. The test level in #8 fits on one 320×180
-   screen, so the goal is fully demonstrable with a fixed camera. Cut without
-   ceremony.
+1. **#10 — camera deadzone. CUT, mid-sprint, deliberately.** p2, explicitly the
+   stretch goal, nothing depends on it, and third in a chain behind the most
+   contended path: #10 needs #7 needs a player entity from #3.
+
+   The cut is only safe if the level fits one screen, so that assumption is now a
+   **constraint on #8**: at `TileSize` 16, the 320×180 virtual resolution is
+   **20 × 11 tiles**, and the test level is authored to fit it. If #8 cannot
+   exercise flat ground, a raised platform, a wall and a pit within that, the cut
+   reopens — Dev B raises it immediately rather than quietly authoring a level
+   that needs a camera we are not building.
+
+   #10 stays in the milestone as visible, uncommitted stretch rather than moving
+   to the backlog: a cut item that vanishes from the board is indistinguishable
+   from one that was never planned. It is available only if #7 and #8 are both
+   merged and no critical-path PR is waiting on a review.
 2. **#9 — trimmed.** Drop the characterisation table, the maximum-jump-distance
    measurement and `docs/movement-feel.md`. Keep the end-to-end scenario: spawn,
    run, jump onto the raised platform, land on it. That one test demonstrates the
@@ -244,6 +279,51 @@ one and the sprint has not delivered. #7 is technically not in the goal sentence
 but without it nobody can see the game, #4 and #5 both instruct the dev to tune
 by running it, and the stakeholder cannot accept a sprint they cannot watch.
 Treat #7 as uncuttable in practice.
+
+## Tuning is provisional until the game is playable
+
+There is a defect in the ordering above and it is mine. #4 and #5 both instruct
+the dev to *tune by running the game, then write the tests to lock in what you
+tuned to*. But #7 — the renderer — needs a player entity from #3, so it lands
+alongside #4 at the earliest. **Dev A therefore tunes blind, against harness
+numbers rather than against feel**, which is backwards from what the issues ask
+for.
+
+Not papered over. The ruling instead:
+
+> **#4's and #5's tuning numbers are provisional until someone has played the
+> game.** The characterisation assertions that freeze them belong after a re-tune
+> pass, not before.
+
+Locking in numbers nobody ever felt would build a regression suite that protects
+a mistake — worse than no suite, because it makes the mistake expensive to
+correct later.
+
+**QA owns the re-tune gate.** Once #7 merges, QA plays the game and validates #4's
+and #5's numbers by feel before #9 (if it survives) freezes them. This needs no
+new issue and it addresses the largest quality risk in the sprint.
+
+**This is why #7 must merge before #6**, and the reason is not scheduling
+convenience: **#6 is the only issue in this sprint whose entire justification is
+subjective.** Coyote time and jump buffering are forgiveness mechanics that
+players never notice and always feel. Nobody can validate 0.1s of coyote time
+from a test log — it either feels forgiving or it does not, and #7 is the last
+chance to find out before #6 locks the feel in.
+
+### The interpolation seam
+
+#7's AC requires interpolating between simulation states via the clock's `Alpha`,
+which requires the *simulation* to retain a previous state. That is Dev A's lane,
+but the criterion sits on Dev B's issue, and originally neither #3 nor #7 said
+who built it. Left alone it would have surfaced as Dev B blocked mid-#7 on a
+change only Dev A can make, at Wave 2, with Dev A on the critical path.
+
+It is now an acceptance criterion on **#4**, not #3. #3 is a pure static collider
+— `static CollisionResult TileCollider.Move(...)`, deliberately stateless for
+determinism — with no entity to snapshot; #4 is where the player entity is born.
+The case that bites is written into the AC: **teleports and spawns must set
+previous equal to current**, or a respawning player smears across the screen from
+wherever it died.
 
 ## Board mechanics for this sprint
 
