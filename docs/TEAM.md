@@ -87,8 +87,13 @@ Where an item genuinely cannot apply to a change, say `n/a` and why. An honest
    Either way, leave a substantive review comment explaining the verdict. A bare
    label with no reasoning is not a review.
 
-   The label survives a push. If you push after sign-off, say so on the PR and
-   say what changed, so the reviewer can re-read or pull the label. A commit that
+   **A push dismisses sign-off.** On every new commit the gate removes
+   `reviewed:approved` and `reviewed:changes-requested` and says so on the PR, so
+   the change needs signing off afresh. There is no exemption for a rebase or a
+   docs-only diff — "it was a small change" is how gates get talked past.
+
+   Say what changed anyway, in your own words. The automation is what stops the
+   merge; your disclosure is what the reviewer actually reads. A commit that
    rides on a review it did not get is a review that did not happen.
 4. **Merge** — the person named in the next section merges, squashing, once both
    checks are green: `gh pr merge <n> --squash --delete-branch`.
