@@ -14,7 +14,8 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-  MIN_LINE_COVERAGE: "70"
+  # Floor applies to Platformer.Core only; see coverlet.runsettings for why.
+  MIN_CORE_LINE_COVERAGE: "90"
 
 jobs:
   build-test:
@@ -48,23 +49,47 @@ jobs:
         run: |
           dotnet test --no-build --configuration Release \
             --logger "trx;LogFileName=results.trx" \
+            --settings coverlet.runsettings \
             --collect:"XPlat Code Coverage" \
             --results-directory TestResults
 
       - name: Enforce coverage threshold
         run: |
-          python3 - "$MIN_LINE_COVERAGE" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          python3 - "$MIN_CORE_LINE_COVERAGE" >> "$GITHUB_STEP_SUMMARY" <<'PY'
           import glob, sys, xml.etree.ElementTree as ET
+
           floor = float(sys.argv[1])
           reports = glob.glob("TestResults/**/coverage.cobertura.xml", recursive=True)
           if not reports:
               print("### Coverage: no report produced")
               sys.exit("::error::no coverage report produced")
-          rate = max(float(ET.parse(r).getroot().get("line-rate", 0)) for r in reports) * 100
-          verdict = "PASS" if rate >= floor else "FAIL"
-          print(f"### Coverage {rate:.1f}% (floor {floor:.0f}%) - {verdict}")
-          if rate < floor:
-              sys.exit(f"::error::line coverage {rate:.1f}% is below the {floor:.0f}% floor")
+
+          # The floor is scoped to Platformer.Core. Reading the per-package rate
+          # rather than the report total means an unmeasured or newly added
+          # assembly can never dilute - or flatter - the number being gated.
+          rates = [
+              (float(pkg.get("line-rate", 0)) * 100, float(pkg.get("branch-rate", 0)) * 100)
+              for report in reports
+              for pkg in ET.parse(report).getroot().iter("package")
+              if pkg.get("name") == "Platformer.Core"
+          ]
+          if not rates:
+              print("### Coverage: Platformer.Core produced no coverage data")
+              sys.exit(
+                  "::error::Platformer.Core is absent from the coverage report; "
+                  "an empty measurement must not be able to satisfy the gate"
+              )
+
+          line, branch = max(rates)
+          verdict = "PASS" if line >= floor else "FAIL"
+          print(f"### Platformer.Core coverage: {line:.1f}% line, {branch:.1f}% branch")
+          print(f"Floor is {floor:.0f}% line - **{verdict}**")
+          print("")
+          print("Platformer.Desktop is excluded by design; see `coverlet.runsettings`.")
+          if line < floor:
+              sys.exit(
+                  f"::error::Platformer.Core line coverage {line:.1f}% is below the {floor:.0f}% floor"
+              )
           PY
 
       - name: Publish test results
