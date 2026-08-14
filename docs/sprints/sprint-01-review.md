@@ -39,8 +39,8 @@ observe it.
 
 ## What shipped
 
-**Merged: #1, #2, #3, #4, #8** — tile grid, test harness, collision, movement,
-level loader. **#7** landed its first slice; the remainder is behind a wiring
+**Merged: #1, #2, #3, #4, #8, #23** — tile grid, test harness, collision,
+movement, level loader, and a convention fix that arrived mid-sprint. **#7** landed its first slice; the remainder is behind a wiring
 commit at time of writing. **#5** in progress. **#6** not started. **#9** ranks
 last in the cut order. **#10** cut.
 
@@ -108,7 +108,47 @@ neither issue was wrong.
 > It cost the critical path nothing and caught two defects that no acceptance
 > criterion would have.
 
-## Finding 3 — four stalls, one shape
+## Finding 3 — the lane separation held, and there is a measurement
+
+Lanes were introduced in `docs/TEAM.md` to keep merge conflicts rare. They did
+something more valuable than that, and the evidence is specific.
+
+Before the renderer merged, Dev B merged #26 into its branch and ran the whole
+stack against the shipped level. Holding right from spawn, the player came to
+rest at:
+
+```
+X=180  RIGHT=192  VX=0  GROUNDED=True
+```
+
+Exactly flush against the plateau face — no overlap, no gap, still grounded.
+Framebuffer measurement put the drawn box at world x 160..172 mid-run and
+180..192 at rest, with **y never changing** across either sample.
+
+That is a body crossing **seven tile seams at 120 u/s without catching on one**,
+in the hand-authored level rather than a purpose-built test grid — the exact
+failure mode #3 was written to avoid, demonstrated by composition rather than by
+the collider's own tests.
+
+What makes it the sprint's strongest structural evidence is who produced it:
+**three agents, in three separate clones, across three independently reviewed
+pull requests** — Dev A's collider, Dev B's level format, Dev B's renderer —
+converging to the unit on a claim the level was deliberately authored to make
+testable. Nobody coordinated the number. It fell out of three correct pieces
+meeting.
+
+Lanes are usually justified as conflict avoidance, which is a weak claim: it says
+the parts did not collide. This says the parts *agreed*. That is the argument for
+keeping the separation in Sprint 2, and it is worth more than the absence of merge
+conflicts.
+
+Set against Finding 2, the picture is honest in both directions: **composition is
+where this architecture is strongest and where its only two real bugs came from.**
+The interfaces agreed to the unit; the questions nobody's issue owned — what
+happens below the level, who keeps the previous position — did not answer
+themselves.
+
+## Finding 4 — four stalls, one shape
 
 The team stalled four times on the same class of defect: **an obligation that was
 real but unnamed, invisible until the exact pull request that needed it.**
@@ -131,7 +171,7 @@ play-test existed only as a paragraph in the sprint plan, owned by nobody, with
 no acceptance criteria — described in the same breath as "the largest quality
 risk in the sprint". It is now #29, p0.
 
-## Finding 4 — a gate that reported success while blocking nothing
+## Finding 5 — a gate that reported success while blocking nothing
 
 Sign-off here is a label, not a GitHub review, so branch protection's
 `dismiss_stale_reviews_on_push` never applied to it. A commit pushed after
