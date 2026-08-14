@@ -3,4 +3,10 @@
   <PropertyGroup>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Embedded rather than copied to output so a published build cannot lose a
+         level, and so tests read exactly the bytes the game ships. -->
+    <EmbeddedResource Include="Levels/Assets/*.txt" LogicalName="Platformer.Core.Levels.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
