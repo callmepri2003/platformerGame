@@ -1,18 +1,39 @@
+using Platformer.Core.Levels;
+using Platformer.Core.Physics;
+using Platformer.Core.Presentation;
 using Platformer.Core.Time;
 using Platformer.Desktop;
 using Raylib_cs;
 
-const int VirtualWidth = 320;
-const int VirtualHeight = 180;
-const int Scale = 4;
+// Size of the player's collision box in world units. It lives here only until
+// #4 introduces the player entity that owns it; the renderer draws whatever box
+// it is handed, so moving this is a one-line change.
+const float BodyWidth = 12f;
+const float BodyHeight = 16f;
 
+var viewport = new VirtualViewport();
+var level = AsciiLevelLoader.LoadEmbedded(AsciiLevelLoader.TestLevelName);
+
+Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
 Raylib.SetTraceLogLevel(TraceLogLevel.Warning);
-Raylib.InitWindow(VirtualWidth * Scale, VirtualHeight * Scale, "Platformer");
+Raylib.InitWindow(viewport.Width * 4, viewport.Height * 4, "Platformer");
+
+// Below the virtual resolution the image can only be cropped, so stop the window
+// there rather than letting someone shrink the game out of view.
+Raylib.SetWindowMinSize(viewport.Width, viewport.Height);
 Raylib.SetTargetFPS(60);
+
+using var screen = new VirtualScreen(viewport);
 
 var clock = new FixedStepClock();
 var input = new RaylibInputSource();
-var ticks = 0L;
+
+// Two states, so the renderer can draw between them. Until #4 lands there is no
+// simulation to advance, so both are the spawn: the body stands on the ground
+// exactly where the level says it starts.
+var spawn = level.SpawnTopLeft(BodyWidth, BodyHeight);
+var current = new Aabb(spawn.X, spawn.Y, BodyWidth, BodyHeight);
+var previous = current;
 
 while (!Raylib.WindowShouldClose())
 {
@@ -21,15 +42,15 @@ while (!Raylib.WindowShouldClose())
     var steps = clock.Advance(Raylib.GetFrameTime());
     for (var i = 0; i < steps; i++)
     {
-        ticks++;
+        previous = current;
+
+        // #4 advances the player here, one fixed step at a time.
     }
 
-    Raylib.BeginDrawing();
-    Raylib.ClearBackground(new Color(13, 15, 20, 255));
-    Raylib.DrawText("walking skeleton", 24, 24, 40, new Color(94, 234, 212, 255));
-    Raylib.DrawText($"ticks {ticks}", 24, 80, 24, Color.Gray);
-    Raylib.DrawText($"input {input.Held}", 24, 112, 24, Color.Gray);
-    Raylib.EndDrawing();
+    screen.BeginFrame(Palette.Sky);
+    WorldRenderer.DrawTiles(level.Tiles, Palette.Solid);
+    WorldRenderer.DrawBody(previous, current, clock.Alpha, Palette.Player);
+    screen.EndFrame(Palette.Letterbox);
 }
 
 Raylib.CloseWindow();
