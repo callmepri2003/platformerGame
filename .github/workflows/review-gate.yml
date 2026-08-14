@@ -11,6 +11,11 @@ name: review-gate
 # sign-off inherits a green `reviewer sign-off` check covering code no reviewer
 # has read: a gate that blocks nothing and reports success.
 #
+# `synchronize` fires on force-pushes and rebases as well as ordinary pushes, so
+# rewriting history dismisses sign-off exactly like adding a commit does. That is
+# deliberate: a rebase changes what a reviewer would be reading, and "I only
+# rebased" is precisely the kind of exemption that lets unreviewed code through.
+#
 # The dismissal lives in this job, rather than in a workflow of its own, for a
 # specific reason. Label changes made with the default `GITHUB_TOKEN` do not
 # trigger new workflow runs, so a separate workflow removing the label would
