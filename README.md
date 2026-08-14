@@ -34,7 +34,15 @@ dotnet build                       # warnings are errors
 dotnet test                        # xUnit suite
 dotnet format                      # apply formatting
 dotnet format --verify-no-changes  # what CI checks
+
+# Platformer.Core coverage, the number CI gates at 90%
+dotnet test --settings coverlet.runsettings --collect:"XPlat Code Coverage"
 ```
+
+Coverage is measured over `Platformer.Core` only. `Platformer.Desktop` is a thin
+Raylib adapter that cannot run headless, so measuring it would describe the size
+of the renderer rather than the quality of the testing — see
+`coverlet.runsettings`.
 
 ## Controls
 

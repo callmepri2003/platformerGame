@@ -11,6 +11,14 @@
   part of this project that has to be correct, and it is headless by design, so
   it is the part worth putting a floor under.
 
+  The Include filter is an exact assembly-name match, and deliberately so. If the
+  simulation is ever split across a second assembly, that assembly is silently
+  unmeasured until it is added here - a real assumption, recorded so it is not a
+  surprise. Widening to [Platformer.Core*]* would NOT be the fix: it would also
+  match Platformer.Core.Tests and start measuring the test assembly against its
+  own floor, which inflates the number with code that is tautologically covered.
+  Prefer adding the new assembly by name.
+
   This is not a licence to hide logic in Platformer.Desktop. Anything with
   behaviour worth testing - see the camera in #10, which is required to be a
   testable type with no Raylib dependency - belongs in a type that tests can
