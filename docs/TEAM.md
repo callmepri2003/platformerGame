@@ -144,6 +144,19 @@ and at standup, so "who is reviewing this" is never something anyone has to
 guess. A gate whose queue is longer than the work it gates has stopped being a
 quality mechanism and started being a delay.
 
+**The same applies to the merger.** If the named merger is unavailable, the other
+of the Scrum Master and the Product Owner merges in their place, announcing it on
+the PR. The constraint that does not bend is unchanged — the merger did not write
+the thing — and there is no case in which an approved, green pull request waits on
+a specific person's availability. If the only two mergers are both unavailable,
+the PR waits and that is said at standup, rather than someone merging their own
+work.
+
+The escape valve was originally written for reviewers only, which left an absent
+*merger* as the one unnamed role in this document — the same shape as the three
+gaps that had already stalled this team when it was written. Found by Dev B
+reviewing #20.
+
 ### When QA is the author
 
 QA signs off on everyone else's PRs and cannot sign off on its own. The gating
