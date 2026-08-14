@@ -10,22 +10,42 @@ namespace Platformer.Core.Tests.Harness;
 /// jumps on the <em>edge</em> of <see cref="InputCommand.Jump"/> while grounded.
 /// </summary>
 /// <remarks>
+/// <para>
+/// <b>+Y is down, matching the rest of the project.</b> Tile row 0 is the top
+/// row (see <c>Platformer.Core.Levels.TileCoord</c>) and the collider in
+/// <c>Platformer.Core.Physics</c> is written to the same convention, so gravity
+/// here is <em>positive</em> and a jump impulse is <em>negative</em>. The floor
+/// is at <c>Y == 0</c> and the body occupies <c>Y &lt;= 0</c> above it.
+/// </para>
+/// <para>
+/// The harness has no vertical convention of its own — it would work equally
+/// well with either — but this file is the most complete worked example of "a
+/// simulation" in the repository, so it deliberately teaches the project's
+/// convention rather than an arbitrary local one.
+/// </para>
+/// <para>
 /// Nothing here reads a clock or a random number, so replaying the same input
 /// always produces the same floats. Delete it once the real simulation lands;
 /// the harness itself does not depend on it.
+/// </para>
 /// </remarks>
 internal sealed class PointMassSimulation : IFixedStepSimulation
 {
-    private const float Gravity = -900f;
+    /// <summary>Positive because +Y is down.</summary>
+    private const float Gravity = 900f;
     private const float Acceleration = 1200f;
     private const float Friction = 800f;
     private const float MaxSpeed = 180f;
-    private const float JumpSpeed = 320f;
+    /// <summary>Negative because a jump travels towards smaller Y.</summary>
+    private const float JumpSpeed = -320f;
 
     /// <summary>Horizontal position in world units.</summary>
     public float X { get; private set; }
 
-    /// <summary>Vertical position in world units; the floor is zero.</summary>
+    /// <summary>
+    /// Vertical position in world units, increasing downwards. The floor is
+    /// zero, so a body in the air has a negative Y.
+    /// </summary>
     public float Y { get; private set; }
 
     /// <summary>Horizontal velocity in world units per second.</summary>
@@ -87,7 +107,8 @@ internal sealed class PointMassSimulation : IFixedStepSimulation
         X += VelocityX * deltaSeconds;
         Y += VelocityY * deltaSeconds;
 
-        if (Y <= 0f)
+        // +Y is down, so falling increases Y and the floor is reached from above.
+        if (Y >= 0f)
         {
             Y = 0f;
             VelocityY = 0f;
