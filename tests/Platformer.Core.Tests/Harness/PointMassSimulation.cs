@@ -4,28 +4,46 @@ namespace Platformer.Core.Tests.Harness;
 
 /// <summary>
 /// A deliberately tiny, fully deterministic stand-in for the real simulation,
-/// used to exercise the harness before <c>Platformer.Core</c> has a simulation
-/// entry point of its own. It is a point mass on a flat floor at
-/// <c>Y == 0</c>: it accelerates horizontally while a direction is held and
-/// jumps on the <em>edge</em> of <see cref="InputCommand.Jump"/> while grounded.
+/// used to exercise the harness with a simulation that can jump. It is a point
+/// mass on a flat floor at <c>Y == 0</c>: it accelerates horizontally while a
+/// direction is held and jumps on the <em>edge</em> of
+/// <see cref="InputCommand.Jump"/> while grounded.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Nothing here reads a clock or a random number, so replaying the same input
-/// always produces the same floats. Delete it once the real simulation lands;
-/// the harness itself does not depend on it.
+/// always produces the same floats.
+/// </para>
+/// <para>
+/// <b>Y increases downwards</b>, matching
+/// <see cref="Platformer.Core.Levels.TileGrid"/> and
+/// <see cref="Platformer.Core.Physics.Aabb"/>: gravity is positive, a jump
+/// impulse is negative, and the floor is the largest Y reachable rather than
+/// the smallest. This model was Y-up when it was written, before the collider
+/// existed. The signs were flipped so that the most complete worked example of
+/// a simulation in the repository cannot teach the wrong convention to whoever
+/// copies its shape.
+/// </para>
+/// <para>
+/// Delete this once <c>PlayerBody</c> can jump, which is the variable-height
+/// jump issue: at that point these harness tests can drive the real simulation
+/// instead. It cannot go sooner without either losing the harness's coverage of
+/// edge-triggered input across steps or bringing jumping forward into an issue
+/// that does not own it.
+/// </para>
 /// </remarks>
 internal sealed class PointMassSimulation : IFixedStepSimulation
 {
-    private const float Gravity = -900f;
+    private const float Gravity = 900f;
     private const float Acceleration = 1200f;
     private const float Friction = 800f;
     private const float MaxSpeed = 180f;
-    private const float JumpSpeed = 320f;
+    private const float JumpSpeed = -320f;
 
     /// <summary>Horizontal position in world units.</summary>
     public float X { get; private set; }
 
-    /// <summary>Vertical position in world units; the floor is zero.</summary>
+    /// <summary>Vertical position in world units; the floor is zero and up is negative.</summary>
     public float Y { get; private set; }
 
     /// <summary>Horizontal velocity in world units per second.</summary>
@@ -87,7 +105,7 @@ internal sealed class PointMassSimulation : IFixedStepSimulation
         X += VelocityX * deltaSeconds;
         Y += VelocityY * deltaSeconds;
 
-        if (Y <= 0f)
+        if (Y >= 0f)
         {
             Y = 0f;
             VelocityY = 0f;
