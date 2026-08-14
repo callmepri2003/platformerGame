@@ -256,6 +256,17 @@ Approved by the Product Owner during planning, with one reversal recorded below.
 3. **#9 — in its entirety.** #9 protects future changes from silently altering
    how the game feels. In Sprint 1 there is no past worth protecting yet, so it
    ranks below every issue that establishes behaviour for the first time.
+4. **#6 — in its entirety, and only to protect the re-tune pass.** Ratified by
+   the Product Owner: if the re-tune is at risk, #9 and then #6 are cut *before*
+   the re-tune is. **Cutting a forgiveness mechanic nobody has felt costs less
+   than shipping one nobody has felt.** This supersedes the earlier "never cut
+   #6" line — #6 is still not to be *split*, but it can be dropped whole if that
+   is what buys the time to play the game.
+
+**Never cut: the re-tune pass.** It is last in the cut order and everything else
+goes first, including two issues that are in the goal-adjacent set. That is
+deliberate: it is the only step that checks the goal as written rather than the
+goal as specified.
 
 **Reversal — #6 is not to be split.** I proposed shipping coyote time and
 deferring jump buffering as the third cut. The Product Owner rejected it, using
@@ -274,8 +285,9 @@ now a slightly larger issue on the critical path; the safety it buys is worth
 more than the hour it costs, because a double-jump exploit makes the game
 trivially breakable.
 
-Never cut: #1, #3, #4, #5, #6, #8. Those six *are* the goal sentence — remove any
-one and the sprint has not delivered. #7 is technically not in the goal sentence,
+Never cut: #1, #3, #4, #5, #8, and the re-tune pass. Those five issues *are* the
+goal sentence — remove any one and the sprint has not delivered — and the re-tune
+is what verifies the clause the issues cannot. #7 is technically not in the goal sentence,
 but without it nobody can see the game, #4 and #5 both instruct the dev to tune
 by running it, and the stakeholder cannot accept a sprint they cannot watch.
 Treat #7 as uncuttable in practice.
@@ -299,9 +311,20 @@ Locking in numbers nobody ever felt would build a regression suite that protects
 a mistake — worse than no suite, because it makes the mistake expensive to
 correct later.
 
-**QA owns the re-tune gate.** Once #7 merges, QA plays the game and validates #4's
-and #5's numbers by feel before #9 (if it survives) freezes them. This needs no
-new issue and it addresses the largest quality risk in the sprint.
+**QA owns the re-tune gate, and the Product Owner has made it binding.** Once #7
+merges, QA plays the game and validates #4's, #5's and #6's numbers by feel.
+
+> The Product Owner will not accept the Sprint 1 increment without it.
+
+The reasoning is worth repeating exactly, because it is the sharpest thing anyone
+said this sprint: the goal says *"movement that already feels responsive"*, and
+responsive is not a property a test suite can assert — it is a property someone
+verifies by playing. **A sprint that merges #4, #5 and #6 with every test green
+and nobody having played the game has not met its goal; it has met its acceptance
+criteria, and those are different things.**
+
+This is not polish and it is not QA's optional extra. It is the acceptance step
+for the goal's last clause.
 
 **This is why #7 must merge before #6**, and the reason is not scheduling
 convenience: **#6 is the only issue in this sprint whose entire justification is
