@@ -380,6 +380,64 @@ public sealed class TileColliderTests
         Assert.NotEqual(64f - BodyHeight, result.Box.Y);
     }
 
+    /// <summary>
+    /// Corridor whose opening is exactly one tile high: floor at row 7 (top face
+    /// y=112) and ceiling at row 5 (underside y=96), leaving the gap [96, 112).
+    /// </summary>
+    private static TileGrid OneTileCorridor()
+    {
+        var grid = new TileGrid(20, 9, TileSize);
+        for (var x = 0; x < grid.Width; x++)
+        {
+            grid.SetTile(x, 5, TileKind.Solid);
+            grid.SetTile(x, 7, TileKind.Solid);
+        }
+
+        return grid;
+    }
+
+    [Fact]
+    public void Move_ThroughAGapExactlyBodyHigh_PassesCleanly()
+    {
+        // A one-tile gap is exactly the height of the body, so it is flush
+        // against the floor and the ceiling at the same time. Whether it can be
+        // entered reduces entirely to whether flush contact counts as a
+        // collision -- it must not. The level in #8 deliberately contains no
+        // such corridor so that a bug here cannot wedge every other test, which
+        // is precisely why the case has to be covered by a purpose-built grid
+        // here instead.
+        var grid = OneTileCorridor();
+        var box = Body(20f, 96f);
+
+        Assert.Equal(96f, box.Top);
+        Assert.Equal(112f, box.Bottom);
+
+        for (var i = 0; i < 60; i++)
+        {
+            var result = TileCollider.Move(box, new Vector2(200f, 0f), Step, grid);
+
+            Assert.Equal(TileContacts.None, result.Contacts);
+            Assert.Equal(box.X + (200f * Step), result.Box.X);
+
+            box = result.Box;
+        }
+
+        // Twelve tiles of corridor traversed without touching either surface.
+        Assert.True(box.X > 20f + (10f * TileSize));
+    }
+
+    [Fact]
+    public void Move_ThroughAGapOneUnitTooSmall_IsBlocked()
+    {
+        // The other side of the same rule: flush fits, overlapping does not.
+        var grid = OneTileCorridor();
+
+        var result = TileCollider.Move(new Aabb(20f, 95f, BodyWidth, 17f), new Vector2(200f, 0f), Step, grid);
+
+        Assert.Equal(TileContacts.WallRight, result.Contacts);
+        Assert.Equal(20f, result.Box.X);
+    }
+
     [Fact]
     public void Move_OutsideTheGrid_IsEmptySoABodyFallsOffTheMap()
     {
