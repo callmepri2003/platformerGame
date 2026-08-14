@@ -24,7 +24,7 @@ graph LR
   I1 --> I7["#7 Render grid + player<br/>Dev B · p1"]
   I3 --> I4["#4 Run: accel + friction<br/>Dev A · p1"]
   I3 --> I5["#5 Gravity + variable jump<br/>Dev A · p1"]
-  I3 -.player entity.-> I7
+  I4 -.player entity + prev state.-> I7
   I4 -.tuning type.-> I5
   I5 --> I6["#6 Coyote + jump buffer<br/>Dev A · p1"]
   I7 --> I10["#10 Camera deadzone<br/>Dev B · p2"]
@@ -45,7 +45,7 @@ confirmed the omission and amended #9:
 
 | Edge | Why it exists | Consequence |
 | --- | --- | --- |
-| #3 → #7 | #7 requires the player be drawn "as a rectangle matching its actual collision box" and interpolated between two simulation states via `Alpha`. Neither exists until #3 defines a player AABB that moves. | #7 is scheduled after #3, not straight after #1. |
+| **#4** → #7 | #7 requires the player be drawn "as a rectangle matching its actual collision box" and interpolated between two simulation states via `Alpha`. I first read this as a dependency on #3; it is not. #3 is a pure static collider with no entity. The player entity and its previous-state snapshot are born in **#4**, where the Product Owner placed the interpolation AC. | #7 is scheduled after **#4**, which is one merge later than the original plan assumed. |
 | #4 → #5 | #4's AC mandates a single named tuning type and says "the next issue and QA will both need to reference them". #5 and #6 extend that type; building it twice guarantees a conflict in `Platformer.Core`. | Dev A does #4 before #5 even though both only hard-depend on #3. |
 | #8 → #9 | #9's last AC is an end-to-end run in "the real test level" — that level ships in #8. **Confirmed by the Product Owner and now written onto #9.** | #8 is scheduled ahead of #7 so it cannot become the thing that strands #9. |
 | #2 → #4/#5/#6/#9 | Not a build dependency, but every one of those issues asserts behaviour over stepped time. Without the harness each dev hand-rolls a stepping loop and the suites diverge. | #2 runs in Wave 0 alongside #1, not later. |
@@ -87,7 +87,7 @@ and Dev A has to write the collision code that lives with it.
 | Who | Issue | Unblocked by |
 | --- | --- | --- |
 | Dev A | #4 run: acceleration and friction, and the shared tuning type | #3 |
-| Dev B | #7 render grid + player at 320×180 | #1 + player AABB from #3 |
+| Dev B | #7 render grid + player at 320×180 — **start the unblocked two-thirds now** | #1 merged; player box and interpolation need #4 |
 | QA | review #3 and #8; start scaffolding #9 against #4's tuning constants | — |
 
 ### Wave 3 — on #4, #5 merged
@@ -309,6 +309,44 @@ subjective.** Coyote time and jump buffering are forgiveness mechanics that
 players never notice and always feel. Nobody can validate 0.1s of coyote time
 from a test log — it either feels forgiving or it does not, and #7 is the last
 chance to find out before #6 locks the feel in.
+
+### Can #7 still land before #6? Honestly: not guaranteed, so stop depending on it
+
+The ordering argument above is sound and I am not retracting it. What I will not
+do is promise the ordering holds, because nothing currently enforces it.
+
+The dependency moved. #7 needs the player entity and its previous-state
+snapshot, and those are born in **#4**, not #3 — so #7 cannot start in earnest
+until #4 merges, one merge later than this plan originally assumed. From there
+Dev A runs #5 then #6 while Dev B runs #7 alone. #7 has the duration of two
+issues to land one, which is why it is *plausible*. But #7 is also the sprint's
+first real rendering work — virtual resolution, integer scaling, letterboxing,
+`Alpha` interpolation, window resize — and first-of-its-kind work is exactly the
+kind that runs long. If it does, the choices are all bad: stall the critical path
+waiting for it, or merge #6 with coyote timings nobody has felt.
+
+Two mitigations, because a schedule I cannot guarantee should not be load-bearing:
+
+1. **Dev B starts the two-thirds of #7 that is already unblocked.** Virtual
+   resolution, integer scaling, letterboxing, resize handling and drawing the
+   tile grid need only #1, which merged long ago. Only the player rectangle and
+   the interpolation need #4. Building those now converts #7 from a
+   two-issue-long race into a short finish, and materially raises the odds it
+   lands before #6.
+2. **The provisional-tuning ruling extends to #6.** Coyote and buffer windows are
+   provisional until played, exactly like #4's and #5's numbers, and QA's re-tune
+   gate covers all three. If #7 slips past #6, #6 merges with provisional windows
+   and is re-tuned once the game is visible — a follow-up tuning PR, which is far
+   cheaper than stalling the critical path or shipping unfelt feel.
+
+Mitigation 2 is the one that matters, because it removes the dependency on the
+ordering rather than betting on it. **The residual risk is real and I am not
+going to dress it up**: if #7 slips *and* the re-tune pass gets squeezed at the
+end of the sprint, we ship forgiveness windows nobody has felt, in a sprint whose
+goal says "movement that already feels responsive". The re-tune gate is therefore
+not optional polish — it is the acceptance step for the goal's last clause, and
+if it is at risk that goes to the Product Owner rather than being absorbed
+quietly.
 
 ### The interpolation seam
 
