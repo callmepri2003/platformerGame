@@ -31,21 +31,23 @@ graph LR
   I4 --> I9["#9 Feel characterisation<br/>QA · p2"]
   I5 --> I9
   I6 --> I9
-  I8 -.e2e test level.-> I9
+  I8 --e2e test level--> I9
   I2["#2 Sim harness + fake input<br/>QA · p0"] -.used by.-> I4
   I2 -.used by.-> I5
   I2 -.used by.-> I6
   I2 -.used by.-> I9
 ```
 
-Solid arrows are hard dependencies stated on the issues. Dotted arrows are
-dependencies I am adding because the acceptance criteria imply them:
+Solid arrows are hard dependencies. Dotted arrows are softer couplings. Four of
+these edges were not stated on the issues when the sprint opened — I added them
+because the acceptance criteria imply them, and the Product Owner has since
+confirmed the omission and amended #9:
 
 | Edge | Why it exists | Consequence |
 | --- | --- | --- |
 | #3 → #7 | #7 requires the player be drawn "as a rectangle matching its actual collision box" and interpolated between two simulation states via `Alpha`. Neither exists until #3 defines a player AABB that moves. | #7 is scheduled after #3, not straight after #1. |
 | #4 → #5 | #4's AC mandates a single named tuning type and says "the next issue and QA will both need to reference them". #5 and #6 extend that type; building it twice guarantees a conflict in `Platformer.Core`. | Dev A does #4 before #5 even though both only hard-depend on #3. |
-| #8 → #9 | #9's last AC is an end-to-end run in "the real test level" — that level ships in #8. | #8 is scheduled ahead of #7 so it cannot become the thing that strands #9. |
+| #8 → #9 | #9's last AC is an end-to-end run in "the real test level" — that level ships in #8. **Confirmed by the Product Owner and now written onto #9.** | #8 is scheduled ahead of #7 so it cannot become the thing that strands #9. |
 | #2 → #4/#5/#6/#9 | Not a build dependency, but every one of those issues asserts behaviour over stepped time. Without the harness each dev hand-rolls a stepping loop and the suites diverge. | #2 runs in Wave 0 alongside #1, not later. |
 
 **Critical path:** #1 → #3 → #4 → #5 → #6 → #9. Six issues deep, four of them on
@@ -180,30 +182,50 @@ Second-order risk worth naming now: CI enforces a **70% line-coverage floor**
 across the solution. #7 and #10 add Raylib-facing code in `Platformer.Desktop`
 that cannot be unit tested headlessly. If that assembly ends up counted in the
 coverage report, #7 could drag the whole solution under the floor and block the
-sprint's most visible deliverable. The moment #7 opens I check whether
-`Platformer.Desktop` appears in `coverage.cobertura.xml`. If it does, the fix is
-a change to the gate — excluding the un-testable rendering entry point — shipped
-by me in its own PR, per `docs/TEAM.md`. Nobody lowers the floor to get a PR
-through, and nobody merges past a red check.
+sprint's most visible deliverable. This is being fixed pre-emptively rather than waited on: coverage
+measurement is scoped to `Platformer.Core`, and `Platformer.Desktop` — a thin
+adapter over Raylib that cannot run headless — is excluded, because measuring it
+would make the number stop meaning anything. That change ships in its own PR
+(`chore/12-process-gaps`), not by lowering the floor. The floor moves **up**, not
+down: `Platformer.Core` is fully covered today and the simulation is the one part
+of this project that has to be right. Nobody lowers a floor to get a PR through,
+and nobody merges past a red check.
 
 ## What gets cut first, in order
+
+Approved by the Product Owner during planning, with one reversal recorded below.
 
 1. **#10 — camera deadzone.** p2, explicitly the sprint's stretch goal, and the
    only issue nothing else depends on. The test level in #8 fits on one 320×180
    screen, so the goal is fully demonstrable with a fixed camera. Cut without
    ceremony.
-2. **#9 — trimmed, not dropped.** Keep the two assertions that protect real
-   correctness: the seam-catching test against #3 and the adversarial
-   double-jump tests against #6. Defer the full characterisation table, the
-   maximum-jump-distance measurement and `docs/movement-feel.md` to Sprint 2.
-   Characterising feel is only valuable once the feel has stopped changing.
-3. **#6 — jump buffering half.** Keep coyote time, defer buffering. Coyote time
-   is the larger perceived-responsiveness win per line of code, and the two
-   mechanics are independent. This is the first cut that costs the sprint goal
-   real quality, so it is a conversation with the Product Owner, not a
-   unilateral call.
+2. **#9 — trimmed.** Drop the characterisation table, the maximum-jump-distance
+   measurement and `docs/movement-feel.md`. Keep the end-to-end scenario: spawn,
+   run, jump onto the raised platform, land on it. That one test demonstrates the
+   sprint goal end to end and is worth keeping long after the characterisation
+   numbers stop being interesting.
+3. **#9 — in its entirety.** #9 protects future changes from silently altering
+   how the game feels. In Sprint 1 there is no past worth protecting yet, so it
+   ranks below every issue that establishes behaviour for the first time.
 
-Never cut: #1, #3, #4, #5, #8. Those five *are* the goal sentence — remove any
+**Reversal — #6 is not to be split.** I proposed shipping coyote time and
+deferring jump buffering as the third cut. The Product Owner rejected it, using
+this document's own risk analysis as the argument: the critical path is already
+six deep with four consecutive links on Dev A, and splitting #6 adds a seventh
+link to precisely that bottleneck. The two mechanics also share state and share
+tests, so the split is artificial — it would cost throughput rather than buy it.
+That reasoning is correct and I withdraw the proposal.
+
+**Consequence — #6 has grown, and that is deliberate.** Three adversarial tests
+moved out of #9 and into #6 as acceptance criteria: no second jump in one fall
+via coyote time, no buffered jump firing twice, no free coyote jump after an
+intentional jump. They prove #6 works rather than guarding it against future
+change, so they must not be able to fall off the sprint when #9 is cut. #6 is
+now a slightly larger issue on the critical path; the safety it buys is worth
+more than the hour it costs, because a double-jump exploit makes the game
+trivially breakable.
+
+Never cut: #1, #3, #4, #5, #6, #8. Those six *are* the goal sentence — remove any
 one and the sprint has not delivered. #7 is technically not in the goal sentence,
 but without it nobody can see the game, #4 and #5 both instruct the dev to tune
 by running it, and the stakeholder cannot accept a sprint they cannot watch.
@@ -213,10 +235,12 @@ Treat #7 as uncuttable in practice.
 
 - Status lives in labels: `status:ready` → `status:in-progress` when a branch is
   pushed → `status:in-review` when the PR opens → `status:done` on merge.
-- At sprint start: #1 and #2 go `status:in-progress`. #3–#10 stay
-  `status:ready`. Nothing here is `blocked` yet — Dev A's wait is sequencing,
-  which the wave plan already handles, and the `blocked` label is reserved for
-  things that need someone to act.
+- At sprint start: #2 is `status:in-progress` and #1 went straight to
+  `status:in-review` — Dev B opened its PR within minutes of kickoff. #4–#10
+  stay `status:ready`. One status label per issue; I clean up duplicates.
+- **#3 carries `blocked` until #1 merges, and it stays visible.** It is the one
+  genuinely blocked item in the sprint, and a blocked issue that looks unblocked
+  is worse than one that looks bad. It clears the moment #1 lands.
 - `main` is protected by a ruleset: squash merges only, both `build & test` and
   `reviewer sign-off` required, review threads must be resolved. `reviewer
   sign-off` stays red until QA applies `reviewed:approved`. That red check on
@@ -224,12 +248,15 @@ Treat #7 as uncuttable in practice.
 - I hold merge authority. Nobody merges their own PR, nobody uses `--admin`,
   nobody applies `reviewed:approved` to their own work.
 
-## Decisions I need from the Product Owner
+## Decisions taken by the Product Owner
 
-1. **#9's end-to-end AC depends on #8, which the issue does not say.** "Jump onto
-   the raised platform in the real test level" cannot be written before the level
-   exists. I have scheduled #8 in Wave 1 to cover this. Confirm the dependency so
-   it can be written onto the issue, or drop that AC from #9.
-2. **Confirm the cut order above**, in particular cut #3 — splitting #6 so coyote
-   time ships and jump buffering does not. I will not make that call unilaterally
-   mid-sprint; I would rather have the answer before the sprint is under pressure.
+1. **#9 depends on #8 — confirmed.** The end-to-end criterion names "the real
+   test level", which does not exist until #8 ships. The dependency is now
+   written onto #9's body. The Wave 1 scheduling of #8 stands.
+2. **Cut order — approved with one reversal.** Cuts 1 and 2 stand as written.
+   Cut 3 was rejected: #6 is not split, and #9 in its entirety becomes the third
+   cut instead. #9's adversarial tests moved into #6 first, so the cut is safe to
+   make. Both issue bodies are amended; the reasoning is in the section above.
+
+Nothing further is open with the Product Owner. If the sprint reaches the point
+where cut 3 is live, it is a standup announcement rather than a fresh decision.
