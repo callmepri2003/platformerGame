@@ -11,6 +11,12 @@ name: review-gate
 # sign-off inherits a green `reviewer sign-off` check covering code no reviewer
 # has read: a gate that blocks nothing and reports success.
 #
+# Dismissal triggers on `reopened` as well as `synchronize`, because GitHub does
+# not fire `synchronize` for a *closed* pull request. Without it the bypass is:
+# approve, close, push, reopen - the gate then reads a still-present
+# `reviewed:approved` and reports green over commits nobody has read, which is
+# the exact failure this job exists to kill, reached through a different door.
+#
 # `synchronize` fires on force-pushes and rebases as well as ordinary pushes, so
 # rewriting history dismisses sign-off exactly like adding a commit does. That is
 # deliberate: a rebase changes what a reviewer would be reading, and "I only
@@ -42,9 +48,10 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
     steps:
       - name: Dismiss sign-off carried over from before this push
-        if: github.event.action == 'synchronize'
+        if: github.event.action == 'synchronize' || github.event.action == 'reopened'
         env:
           SHA: ${{ github.event.pull_request.head.sha }}
+          ACTION: ${{ github.event.action }}
         run: |
           set -euo pipefail
 
@@ -68,8 +75,13 @@ jobs:
           fi
 
           short="${SHA:0:7}"
+          if [ "$ACTION" = "reopened" ]; then
+            reason="this pull request was reopened at \`$short\`. GitHub does not fire \`synchronize\` for a closed pull request, so commits pushed while it was closed were never seen by this gate"
+          else
+            reason="a new commit was pushed (\`$short\`)"
+          fi
           body=$(printf '%s\n' \
-            "**[ci]** Sign-off dismissed: removed $removed because a new commit was pushed (\`$short\`)." \
+            "**[ci]** Sign-off dismissed: removed $removed because $reason." \
             "" \
             "This team signs off with labels rather than GitHub reviews, so branch protection's stale-review dismissal never applied to them. Without this, \`$short\` would have inherited a green \`reviewer sign-off\` check covering code no reviewer has read." \
             "" \
