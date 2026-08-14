@@ -4,31 +4,94 @@ name: review-gate
 # an account approve its own pull request. This check is therefore the team's
 # binding approval mechanism: QA signs off by applying `reviewed:approved`,
 # and branch protection requires this check to pass before merge.
+#
+# Because sign-off is a *label* and not a GitHub review, branch protection's
+# `dismiss_stale_reviews_on_push` does not touch it - it dismisses reviews, and
+# there are none. Without the dismissal step below, a commit pushed after
+# sign-off inherits a green `reviewer sign-off` check covering code no reviewer
+# has read: a gate that blocks nothing and reports success.
+#
+# The dismissal lives in this job, rather than in a workflow of its own, for a
+# specific reason. Label changes made with the default `GITHUB_TOKEN` do not
+# trigger new workflow runs, so a separate workflow removing the label would
+# never fire the `unlabeled` event that re-runs this gate - the already-passed
+# `synchronize` run would stay the reported result and the check would remain
+# green. Removing the label and re-evaluating in one job removes that race
+# entirely: there is no second run to wait for.
 
 on:
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
+
+permissions:
+  pull-requests: write
 
 jobs:
   gate:
     name: reviewer sign-off
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
     steps:
-      - name: Check review labels
+      - name: Dismiss sign-off carried over from before this push
+        if: github.event.action == 'synchronize'
         env:
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          DRAFT: ${{ github.event.pull_request.draft }}
+          SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          echo "labels: ${LABELS:-<none>}"
-          if [ "$DRAFT" = "true" ]; then
+          set -euo pipefail
+
+          labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '[.[].name] | join(",")')
+          echo "labels before dismissal: ${labels:-<none>}"
+
+          removed=""
+          for label in "reviewed:approved" "reviewed:changes-requested"; do
+            case ",$labels," in
+              *",$label,"*)
+                gh api -X DELETE "repos/$REPO/issues/$PR/labels/$label" --silent
+                echo "removed $label"
+                removed="${removed:+$removed and }\`$label\`"
+                ;;
+            esac
+          done
+
+          if [ -z "$removed" ]; then
+            echo "No sign-off label to dismiss."
+            exit 0
+          fi
+
+          short="${SHA:0:7}"
+          body=$(printf '%s\n' \
+            "**[ci]** Sign-off dismissed: removed $removed because a new commit was pushed (\`$short\`)." \
+            "" \
+            "This team signs off with labels rather than GitHub reviews, so branch protection's stale-review dismissal never applied to them. Without this, \`$short\` would have inherited a green \`reviewer sign-off\` check covering code no reviewer has read." \
+            "" \
+            "\`reviewer sign-off\` is red again, and this PR cannot merge until it is signed off afresh. There is no exemption for small changes, docs-only diffs or rebases." \
+            "" \
+            "Author: say what changed in \`$short\` so the reviewer knows what to re-read.")
+          gh pr comment "$PR" --repo "$REPO" --body "$body"
+
+      - name: Check review labels
+        run: |
+          set -euo pipefail
+
+          # Read state live rather than from the event payload. The payload is a
+          # snapshot from before the dismissal step above, so trusting it would
+          # re-introduce exactly the staleness this gate exists to prevent.
+          labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '[.[].name] | join(",")')
+          draft=$(gh api "repos/$REPO/pulls/$PR" --jq '.draft')
+          echo "labels: ${labels:-<none>}"
+
+          if [ "$draft" = "true" ]; then
             echo "::error::PR is a draft; mark it ready for review"; exit 1
           fi
-          case ",$LABELS," in
+          case ",$labels," in
             *,blocked,*)
               echo "::error::PR carries the 'blocked' label"; exit 1 ;;
           esac
-          case ",$LABELS," in
+          case ",$labels," in
             *,reviewed:approved,*)
               echo "Reviewer sign-off present."; exit 0 ;;
             *,reviewed:changes-requested,*)
