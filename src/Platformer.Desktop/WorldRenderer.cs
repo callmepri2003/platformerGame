@@ -1,6 +1,5 @@
-using System.Numerics;
 using Platformer.Core.Levels;
-using Platformer.Core.Physics;
+using Platformer.Core.Movement;
 using Raylib_cs;
 
 namespace Platformer.Desktop;
@@ -37,40 +36,47 @@ internal static class WorldRenderer
     }
 
     /// <summary>
-    /// Draws a body as the rectangle it actually collides with, interpolated
-    /// between the last two simulation states.
+    /// Draws the player as the rectangle it actually collides with, at the
+    /// position it occupies part-way through the current simulation step.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The parameters are <see cref="Aabb"/> — the very type the collider
-    /// resolves against tiles — rather than a position and a separately supplied
-    /// size. There is therefore no second description of the player's shape that
-    /// could drift from the physical one: if the box the game draws is wrong,
-    /// the box the game collides with is wrong in exactly the same way, and the
-    /// bug is visible instead of hidden.
+    /// The size comes from <see cref="PlayerBody.Bounds"/> — the box
+    /// <see cref="Platformer.Core.Physics.TileCollider"/> resolves against tiles
+    /// — so there is no second description of the player's shape that could
+    /// drift from the physical one. If the drawn box is wrong, the collided box
+    /// is wrong identically, and the bug is visible instead of hidden.
     /// </para>
     /// <para>
-    /// Interpolating by <see cref="Platformer.Core.Time.FixedStepClock.Alpha"/>
-    /// is what stops motion stuttering on a display running faster than the
-    /// 60 Hz simulation. The simulation lands on discrete positions; the renderer
-    /// shows where the body is part-way between the last two. Only the position
-    /// is interpolated — a collision box does not change size between steps, and
-    /// interpolating its extent would draw a shape the collider never had.
+    /// The position comes from <see cref="PlayerBody.InterpolatedPosition"/>
+    /// rather than from a blend performed here. The simulation advances at a
+    /// fixed 60 Hz while the screen refreshes at whatever rate it likes, so
+    /// drawing raw simulation positions stutters — but the correct blend is not
+    /// simply "lerp the last two positions". A respawn moves the player without
+    /// travelling, and interpolating across that would smear them across the
+    /// level. The body knows which of its movements were travel; the renderer
+    /// does not, and must not have to.
     /// </para>
     /// </remarks>
-    /// <param name="previous">The body after the previous simulation step.</param>
-    /// <param name="current">The body after the most recent step.</param>
-    /// <param name="alpha">Fraction of a step elapsed since the last one, in [0, 1).</param>
-    /// <param name="colour">Colour to fill it with.</param>
-    public static void DrawBody(in Aabb previous, in Aabb current, float alpha, Color colour)
+    /// <param name="player">The player to draw.</param>
+    /// <param name="alpha">
+    /// Fraction of a fixed step already elapsed, from
+    /// <see cref="Platformer.Core.Time.FixedStepClock.Alpha"/>.
+    /// </param>
+    /// <param name="colour">Colour to fill the box with.</param>
+    public static void DrawBody(PlayerBody player, float alpha, Color colour)
     {
-        var position = Vector2.Lerp(
-            new Vector2(previous.X, previous.Y),
-            new Vector2(current.X, current.Y),
-            alpha);
+        ArgumentNullException.ThrowIfNull(player);
+
+        // Ask the body; do not lerp here. It is the only thing that knows which
+        // of its movements were travel: a respawn moves the player without
+        // travelling, and a blend written at this line would smear them across
+        // the level on every death. The bug appears only when the player dies,
+        // which is why this line is worth leaving alone.
+        var position = player.InterpolatedPosition(alpha);
 
         Raylib.DrawRectangleRec(
-            new Rectangle(position.X, position.Y, current.Width, current.Height),
+            new Rectangle(position.X, position.Y, player.Bounds.Width, player.Bounds.Height),
             colour);
     }
 }

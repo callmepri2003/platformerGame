@@ -1,15 +1,9 @@
 using Platformer.Core.Levels;
-using Platformer.Core.Physics;
+using Platformer.Core.Movement;
 using Platformer.Core.Presentation;
 using Platformer.Core.Time;
 using Platformer.Desktop;
 using Raylib_cs;
-
-// Size of the player's collision box in world units. It lives here only until
-// #4 introduces the player entity that owns it; the renderer draws whatever box
-// it is handed, so moving this is a one-line change.
-const float BodyWidth = 12f;
-const float BodyHeight = 16f;
 
 var viewport = new VirtualViewport();
 var level = AsciiLevelLoader.LoadEmbedded(AsciiLevelLoader.TestLevelName);
@@ -28,28 +22,24 @@ using var screen = new VirtualScreen(viewport);
 var clock = new FixedStepClock();
 var input = new RaylibInputSource();
 
-// Two states, so the renderer can draw between them. Until #4 lands there is no
-// simulation to advance, so both are the spawn: the body stands on the ground
-// exactly where the level says it starts.
-var spawn = level.SpawnTopLeft(BodyWidth, BodyHeight);
-var current = new Aabb(spawn.X, spawn.Y, BodyWidth, BodyHeight);
-var previous = current;
+var player = new PlayerBody(level);
 
 while (!Raylib.WindowShouldClose())
 {
     input.Poll();
 
+    // Every step is the same length regardless of how long the frame took, so
+    // the simulation behaves identically on any machine; the renderer absorbs
+    // the difference through the clock's alpha rather than the physics doing it.
     var steps = clock.Advance(Raylib.GetFrameTime());
     for (var i = 0; i < steps; i++)
     {
-        previous = current;
-
-        // #4 advances the player here, one fixed step at a time.
+        player.Advance(input.Held, FixedStepClock.FixedDelta);
     }
 
     screen.BeginFrame(Palette.Sky);
     WorldRenderer.DrawTiles(level.Tiles, Palette.Solid);
-    WorldRenderer.DrawBody(previous, current, clock.Alpha, Palette.Player);
+    WorldRenderer.DrawBody(player, clock.Alpha, Palette.Player);
     screen.EndFrame(Palette.Letterbox);
 }
 
