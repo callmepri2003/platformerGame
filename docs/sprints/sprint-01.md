@@ -99,8 +99,14 @@ and Dev A has to write the collision code that lives with it.
 | QA | #9 feel characterisation + `docs/movement-feel.md` | #4, #5, #6, #8 |
 
 **Merge order I will enforce:** #1 → #2 → #3 → #8 → #4 → #5 → #7 → #6 → #9 → #10.
-#4, #5 and #6 all edit the same movement types in `Platformer.Core`; they are the
-same agent's work and will be merged strictly in that order rather than raced.
+
+Only part of that order is load-bearing. **#4 → #5 → #6 is hard**: all three edit
+the same movement types in `Platformer.Core`, they are one agent's work, and they
+will be merged strictly in sequence rather than raced. **#1 → #2 is not**: QA
+merged the two branches locally and found no conflicts and a green combined
+suite, so neither should ever sit waiting on the other. Where the order is
+merely preference, whichever is green first goes first — idle time on this
+critical path is the thing the plan is trying to buy back.
 
 ## Assignments
 
@@ -178,17 +184,25 @@ Mitigations, all of which are things I do rather than things I hope for:
 - **Dev B never waits on Dev A.** #8 needs only #1, so Dev B always has merged
   work available even while the simulation chain is moving.
 
-Second-order risk worth naming now: CI enforces a **70% line-coverage floor**
-across the solution. #7 and #10 add Raylib-facing code in `Platformer.Desktop`
-that cannot be unit tested headlessly. If that assembly ends up counted in the
-coverage report, #7 could drag the whole solution under the floor and block the
-sprint's most visible deliverable. This is being fixed pre-emptively rather than waited on: coverage
-measurement is scoped to `Platformer.Core`, and `Platformer.Desktop` — a thin
-adapter over Raylib that cannot run headless — is excluded, because measuring it
-would make the number stop meaning anything. That change ships in its own PR
-(`chore/12-process-gaps`), not by lowering the floor. The floor moves **up**, not
-down: `Platformer.Core` is fully covered today and the simulation is the one part
-of this project that has to be right. Nobody lowers a floor to get a PR through,
+Second-order note on the coverage gate, corrected by QA during review and worth
+recording accurately. CI enforces a line-coverage floor, and #7 and #10 add
+Raylib-facing code in `Platformer.Desktop` that cannot be unit tested headlessly.
+**This is not a live risk today.** `coverlet.collector` instruments only the
+assemblies actually loaded during a test run, and nothing loads
+`Platformer.Desktop` — the sole test project references `Platformer.Core` alone.
+QA ran the coverage step and confirmed the report contains exactly one package,
+`Platformer.Core`, at 100%. So #7 cannot drag the number down, and nobody should
+plan around it as a threat to the sprint. What *is* worth fixing is that the scoping is currently incidental rather than
+stated: it holds because of which project references which, and it would change
+silently the day someone adds a `Platformer.Desktop.Tests` project. PR #15
+(`chore/12-process-gaps`) makes it explicit — measurement scoped to
+`Platformer.Core`, `Platformer.Desktop` excluded by a named filter, because
+measuring a thin Raylib adapter that cannot run headless would make the number
+describe the size of the renderer rather than the quality of the testing. That
+PR is open and unmerged at the time of writing; until it lands, none of it is
+true of `main`. It also raises the floor **up**, 70% → 90%, not down:
+`Platformer.Core` is fully covered today and the simulation is the one part of
+this project that has to be right. Nobody lowers a floor to get a PR through,
 and nobody merges past a red check.
 
 ## What gets cut first, in order
