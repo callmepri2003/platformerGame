@@ -21,6 +21,14 @@ Lanes exist to keep merge conflicts rare. Straying outside your lane is allowed
 when the work genuinely requires it — say so in the PR description so the
 reviewer knows to look wider.
 
+**Editor and tooling config applies to data files, not just source.** Twice now a
+config default has come close to eating someone's work: `.editorconfig`'s
+`trim_trailing_whitespace` would have silently corrupted any ASCII level that
+uses trailing spaces for empty tiles. Before adding a rule that rewrites files on
+save or in CI, ask which non-source files it will also rewrite — level maps,
+fixtures, expected-output files — and exclude them explicitly. A formatter that
+edits your test data is indistinguishable from a flaky test.
+
 ## The board
 
 - **Backlog** — open issues with no milestone.
@@ -126,6 +134,15 @@ tidiness problem; it is a stall waiting for the PR that needs it.
 Nobody reviews their own work and nobody merges their own work. The chain has to
 terminate somewhere, and it terminates at the Product Owner, who is the role
 accountable to the stakeholder.
+
+**The table is a default, not a straitjacket.** The rule that cannot bend is the
+principle above it: the reviewer did not write the thing. Who that reviewer is
+may be reassigned by the Scrum Master or the Product Owner to protect review
+latency — most often when the default reviewer is on the critical path and a
+non-blocking queue is forming behind them. Reassignment is announced on the PR
+and at standup, so "who is reviewing this" is never something anyone has to
+guess. A gate whose queue is longer than the work it gates has stopped being a
+quality mechanism and started being a delay.
 
 ### When QA is the author
 
