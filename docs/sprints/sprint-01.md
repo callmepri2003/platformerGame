@@ -333,6 +333,39 @@ players never notice and always feel. Nobody can validate 0.1s of coyote time
 from a test log — it either feels forgiving or it does not, and #7 is the last
 chance to find out before #6 locks the feel in.
 
+### What "#4 done" now means — it grew twice
+
+#4 started as horizontal movement and a tuning type. It now also owns the player
+entity itself, and two criteria folded in mid-sprint:
+
+1. **The previous-state snapshot** for #7's `Alpha` interpolation, including
+   teleports and spawns setting previous equal to current.
+2. **A death plane and respawn.** Dev A's review of #21 found something neither
+   issue owned: driving the collider through the shipped level ends at
+   `X=-468, Y=1944, still falling`. Out-of-bounds is `Empty`, which is the right
+   call and the reason #3 needs no border special case — but it means that below
+   the level there is nothing at all, including walls. Every component is
+   correct; the *composition* is broken. Once #7 makes it visible the pit reads
+   as "the player vanished permanently, restart the game", and it is the most
+   inviting feature in the level.
+
+Both were folded into #4 rather than opened as issues, deliberately: respawn is
+player-entity state and #4 is where the entity is born, so a new issue would have
+cost a review round trip on the critical path for work that belongs in the same
+type. Scoped hard — a threshold check and a reset. No lives, no score, no
+animation.
+
+This does not change the wave order. It does change what "#4 done" means, and it
+means **#9's end-to-end scenario can assume a recoverable pit rather than a
+one-way trip** — which is the difference between a level that exercises falling
+and a level that ends the session.
+
+Worth naming the pattern, because it happened twice: both criteria were found by
+a *reviewer* reasoning about composition, not by either issue's author. #3 was
+correct. #8 was correct. The bug lived between them. That is what the
+non-blocking consumer-feedback duty exists to catch, and it has now paid for
+itself twice in one sprint.
+
 ### Can #7 still land before #6? Honestly: not guaranteed, so stop depending on it
 
 The ordering argument above is sound and I am not retracting it. What I will not
