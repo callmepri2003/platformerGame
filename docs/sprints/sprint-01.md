@@ -24,7 +24,7 @@ graph LR
   I1 --> I7["#7 Render grid + player<br/>Dev B · p1"]
   I3 --> I4["#4 Run: accel + friction<br/>Dev A · p1"]
   I3 --> I5["#5 Gravity + variable jump<br/>Dev A · p1"]
-  I3 -.player entity.-> I7
+  I4 -.player entity + prev state.-> I7
   I4 -.tuning type.-> I5
   I5 --> I6["#6 Coyote + jump buffer<br/>Dev A · p1"]
   I7 --> I10["#10 Camera deadzone<br/>Dev B · p2"]
@@ -45,7 +45,7 @@ confirmed the omission and amended #9:
 
 | Edge | Why it exists | Consequence |
 | --- | --- | --- |
-| #3 → #7 | #7 requires the player be drawn "as a rectangle matching its actual collision box" and interpolated between two simulation states via `Alpha`. Neither exists until #3 defines a player AABB that moves. | #7 is scheduled after #3, not straight after #1. |
+| **#4** → #7 | #7 requires the player be drawn "as a rectangle matching its actual collision box" and interpolated between two simulation states via `Alpha`. I first read this as a dependency on #3; it is not. #3 is a pure static collider with no entity. The player entity and its previous-state snapshot are born in **#4**, where the Product Owner placed the interpolation AC. | #7 is scheduled after **#4**, which is one merge later than the original plan assumed. |
 | #4 → #5 | #4's AC mandates a single named tuning type and says "the next issue and QA will both need to reference them". #5 and #6 extend that type; building it twice guarantees a conflict in `Platformer.Core`. | Dev A does #4 before #5 even though both only hard-depend on #3. |
 | #8 → #9 | #9's last AC is an end-to-end run in "the real test level" — that level ships in #8. **Confirmed by the Product Owner and now written onto #9.** | #8 is scheduled ahead of #7 so it cannot become the thing that strands #9. |
 | #2 → #4/#5/#6/#9 | Not a build dependency, but every one of those issues asserts behaviour over stepped time. Without the harness each dev hand-rolls a stepping loop and the suites diverge. | #2 runs in Wave 0 alongside #1, not later. |
@@ -87,7 +87,7 @@ and Dev A has to write the collision code that lives with it.
 | Who | Issue | Unblocked by |
 | --- | --- | --- |
 | Dev A | #4 run: acceleration and friction, and the shared tuning type | #3 |
-| Dev B | #7 render grid + player at 320×180 | #1 + player AABB from #3 |
+| Dev B | #7 render grid + player at 320×180 — **start the unblocked two-thirds now** | #1 merged; player box and interpolation need #4 |
 | QA | review #3 and #8; start scaffolding #9 against #4's tuning constants | — |
 
 ### Wave 3 — on #4, #5 merged
@@ -95,7 +95,7 @@ and Dev A has to write the collision code that lives with it.
 | Who | Issue | Unblocked by |
 | --- | --- | --- |
 | Dev A | #5 gravity + variable jump, then #6 coyote time + buffering | #3, #4 (tuning type), #5 |
-| Dev B | #10 camera deadzone — **stretch only** | #7 |
+| Dev B | ~~#10 camera deadzone~~ — **cut**, see below | #7 |
 | QA | #9 feel characterisation + `docs/movement-feel.md` | #4, #5, #6, #8 |
 
 **Merge order I will enforce:** #1 → #2 → #3 → #8 → #4 → #5 → #7 → #6 → #9 → #10.
@@ -122,6 +122,21 @@ critical path is the thing the plan is trying to buy back.
 `area:presentation` — that is Dev B's lane per `docs/TEAM.md`, and it is correct.
 Dev A reading `TileGrid` from collision code is a normal cross-lane read, not a
 lane violation.
+
+### Who gates QA's own PRs
+
+`docs/TEAM.md` requires the Scrum Master to name, here, whichever dev is **not**
+on the critical path, because that dev is the gating reviewer for QA's PRs. QA
+cannot sign off on its own work, and parking that gate on the critical-path agent
+would spend the one resource this sprint is short of.
+
+**Currently: Dev B.** The critical path is #3 → #4 → #5 → #6, all Dev A. This
+holds for the whole sprint unless #7 or #8 slips far enough to put Dev B on the
+path too, in which case it goes to the Product Owner rather than blocking.
+
+Consumer feedback is a separate, non-blocking duty and is not affected: the
+primary consumer of an API comments on the PR that introduces it, and the merge
+never waits for that comment.
 
 ## Dev A is blocked at sprint start. Honestly.
 
@@ -183,6 +198,15 @@ Mitigations, all of which are things I do rather than things I hope for:
   ships. Perfect collision that lands after the sprint is worth zero.
 - **Dev B never waits on Dev A.** #8 needs only #1, so Dev B always has merged
   work available even while the simulation chain is moving.
+- **QA's spare capacity is protected, not filled.** Once #2 lands, QA's remaining
+  sprint issue is #9, which is both the last thing cut and blocked behind #4, #5,
+  #6 and #8. That idleness is not a gap to plug with pulled-in scope — it *is*
+  the mitigation for the bottleneck. A reviewer with nothing else on means #3 and
+  #8 get reviewed the moment they open instead of queuing behind the reviewer's
+  own build work. #13 went open-to-merge in about twenty minutes precisely
+  because someone was free to look at it. Scope pulled into a sprint to occupy an
+  idle agent is how sprints lose their goal, and "we had capacity" is the weakest
+  reason to expand one.
 
 Second-order note on the coverage gate, corrected by QA during review and worth
 recording accurately. CI enforces a line-coverage floor, and #7 and #10 add
@@ -209,10 +233,21 @@ and nobody merges past a red check.
 
 Approved by the Product Owner during planning, with one reversal recorded below.
 
-1. **#10 — camera deadzone.** p2, explicitly the sprint's stretch goal, and the
-   only issue nothing else depends on. The test level in #8 fits on one 320×180
-   screen, so the goal is fully demonstrable with a fixed camera. Cut without
-   ceremony.
+1. **#10 — camera deadzone. CUT, mid-sprint, deliberately.** p2, explicitly the
+   stretch goal, nothing depends on it, and third in a chain behind the most
+   contended path: #10 needs #7 needs a player entity from #3.
+
+   The cut is only safe if the level fits one screen, so that assumption is now a
+   **constraint on #8**: at `TileSize` 16, the 320×180 virtual resolution is
+   **20 × 11 tiles**, and the test level is authored to fit it. If #8 cannot
+   exercise flat ground, a raised platform, a wall and a pit within that, the cut
+   reopens — Dev B raises it immediately rather than quietly authoring a level
+   that needs a camera we are not building.
+
+   #10 stays in the milestone as visible, uncommitted stretch rather than moving
+   to the backlog: a cut item that vanishes from the board is indistinguishable
+   from one that was never planned. It is available only if #7 and #8 are both
+   merged and no critical-path PR is waiting on a review.
 2. **#9 — trimmed.** Drop the characterisation table, the maximum-jump-distance
    measurement and `docs/movement-feel.md`. Keep the end-to-end scenario: spawn,
    run, jump onto the raised platform, land on it. That one test demonstrates the
@@ -221,6 +256,17 @@ Approved by the Product Owner during planning, with one reversal recorded below.
 3. **#9 — in its entirety.** #9 protects future changes from silently altering
    how the game feels. In Sprint 1 there is no past worth protecting yet, so it
    ranks below every issue that establishes behaviour for the first time.
+4. **#6 — in its entirety, and only to protect the re-tune pass.** Ratified by
+   the Product Owner: if the re-tune is at risk, #9 and then #6 are cut *before*
+   the re-tune is. **Cutting a forgiveness mechanic nobody has felt costs less
+   than shipping one nobody has felt.** This supersedes the earlier "never cut
+   #6" line — #6 is still not to be *split*, but it can be dropped whole if that
+   is what buys the time to play the game.
+
+**Never cut: the re-tune pass.** It is last in the cut order and everything else
+goes first, including two issues that are in the goal-adjacent set. That is
+deliberate: it is the only step that checks the goal as written rather than the
+goal as specified.
 
 **Reversal — #6 is not to be split.** I proposed shipping coyote time and
 deferring jump buffering as the third cut. The Product Owner rejected it, using
@@ -239,11 +285,139 @@ now a slightly larger issue on the critical path; the safety it buys is worth
 more than the hour it costs, because a double-jump exploit makes the game
 trivially breakable.
 
-Never cut: #1, #3, #4, #5, #6, #8. Those six *are* the goal sentence — remove any
-one and the sprint has not delivered. #7 is technically not in the goal sentence,
+Never cut: #1, #3, #4, #5, #8, and the re-tune pass. Those five issues *are* the
+goal sentence — remove any one and the sprint has not delivered — and the re-tune
+is what verifies the clause the issues cannot. #7 is technically not in the goal sentence,
 but without it nobody can see the game, #4 and #5 both instruct the dev to tune
 by running it, and the stakeholder cannot accept a sprint they cannot watch.
 Treat #7 as uncuttable in practice.
+
+## Tuning is provisional until the game is playable
+
+There is a defect in the ordering above and it is mine. #4 and #5 both instruct
+the dev to *tune by running the game, then write the tests to lock in what you
+tuned to*. But #7 — the renderer — needs a player entity from #3, so it lands
+alongside #4 at the earliest. **Dev A therefore tunes blind, against harness
+numbers rather than against feel**, which is backwards from what the issues ask
+for.
+
+Not papered over. The ruling instead:
+
+> **#4's and #5's tuning numbers are provisional until someone has played the
+> game.** The characterisation assertions that freeze them belong after a re-tune
+> pass, not before.
+
+Locking in numbers nobody ever felt would build a regression suite that protects
+a mistake — worse than no suite, because it makes the mistake expensive to
+correct later.
+
+**QA owns the re-tune gate, and the Product Owner has made it binding.** Once #7
+merges, QA plays the game and validates #4's, #5's and #6's numbers by feel.
+
+> The Product Owner will not accept the Sprint 1 increment without it.
+
+The reasoning is worth repeating exactly, because it is the sharpest thing anyone
+said this sprint: the goal says *"movement that already feels responsive"*, and
+responsive is not a property a test suite can assert — it is a property someone
+verifies by playing. **A sprint that merges #4, #5 and #6 with every test green
+and nobody having played the game has not met its goal; it has met its acceptance
+criteria, and those are different things.**
+
+This is not polish and it is not QA's optional extra. It is the acceptance step
+for the goal's last clause.
+
+**This is why #7 must merge before #6**, and the reason is not scheduling
+convenience: **#6 is the only issue in this sprint whose entire justification is
+subjective.** Coyote time and jump buffering are forgiveness mechanics that
+players never notice and always feel. Nobody can validate 0.1s of coyote time
+from a test log — it either feels forgiving or it does not, and #7 is the last
+chance to find out before #6 locks the feel in.
+
+### What "#4 done" now means — it grew twice
+
+#4 started as horizontal movement and a tuning type. It now also owns the player
+entity itself, and two criteria folded in mid-sprint:
+
+1. **The previous-state snapshot** for #7's `Alpha` interpolation, including
+   teleports and spawns setting previous equal to current.
+2. **A death plane and respawn.** Dev A's review of #21 found something neither
+   issue owned: driving the collider through the shipped level ends at
+   `X=-468, Y=1944, still falling`. Out-of-bounds is `Empty`, which is the right
+   call and the reason #3 needs no border special case — but it means that below
+   the level there is nothing at all, including walls. Every component is
+   correct; the *composition* is broken. Once #7 makes it visible the pit reads
+   as "the player vanished permanently, restart the game", and it is the most
+   inviting feature in the level.
+
+Both were folded into #4 rather than opened as issues, deliberately: respawn is
+player-entity state and #4 is where the entity is born, so a new issue would have
+cost a review round trip on the critical path for work that belongs in the same
+type. Scoped hard — a threshold check and a reset. No lives, no score, no
+animation.
+
+This does not change the wave order. It does change what "#4 done" means, and it
+means **#9's end-to-end scenario can assume a recoverable pit rather than a
+one-way trip** — which is the difference between a level that exercises falling
+and a level that ends the session.
+
+Worth naming the pattern, because it happened twice: both criteria were found by
+a *reviewer* reasoning about composition, not by either issue's author. #3 was
+correct. #8 was correct. The bug lived between them. That is what the
+non-blocking consumer-feedback duty exists to catch, and it has now paid for
+itself twice in one sprint.
+
+### Can #7 still land before #6? Honestly: not guaranteed, so stop depending on it
+
+The ordering argument above is sound and I am not retracting it. What I will not
+do is promise the ordering holds, because nothing currently enforces it.
+
+The dependency moved. #7 needs the player entity and its previous-state
+snapshot, and those are born in **#4**, not #3 — so #7 cannot start in earnest
+until #4 merges, one merge later than this plan originally assumed. From there
+Dev A runs #5 then #6 while Dev B runs #7 alone. #7 has the duration of two
+issues to land one, which is why it is *plausible*. But #7 is also the sprint's
+first real rendering work — virtual resolution, integer scaling, letterboxing,
+`Alpha` interpolation, window resize — and first-of-its-kind work is exactly the
+kind that runs long. If it does, the choices are all bad: stall the critical path
+waiting for it, or merge #6 with coyote timings nobody has felt.
+
+Two mitigations, because a schedule I cannot guarantee should not be load-bearing:
+
+1. **Dev B starts the two-thirds of #7 that is already unblocked.** Virtual
+   resolution, integer scaling, letterboxing, resize handling and drawing the
+   tile grid need only #1, which merged long ago. Only the player rectangle and
+   the interpolation need #4. Building those now converts #7 from a
+   two-issue-long race into a short finish, and materially raises the odds it
+   lands before #6.
+2. **The provisional-tuning ruling extends to #6.** Coyote and buffer windows are
+   provisional until played, exactly like #4's and #5's numbers, and QA's re-tune
+   gate covers all three. If #7 slips past #6, #6 merges with provisional windows
+   and is re-tuned once the game is visible — a follow-up tuning PR, which is far
+   cheaper than stalling the critical path or shipping unfelt feel.
+
+Mitigation 2 is the one that matters, because it removes the dependency on the
+ordering rather than betting on it. **The residual risk is real and I am not
+going to dress it up**: if #7 slips *and* the re-tune pass gets squeezed at the
+end of the sprint, we ship forgiveness windows nobody has felt, in a sprint whose
+goal says "movement that already feels responsive". The re-tune gate is therefore
+not optional polish — it is the acceptance step for the goal's last clause, and
+if it is at risk that goes to the Product Owner rather than being absorbed
+quietly.
+
+### The interpolation seam
+
+#7's AC requires interpolating between simulation states via the clock's `Alpha`,
+which requires the *simulation* to retain a previous state. That is Dev A's lane,
+but the criterion sits on Dev B's issue, and originally neither #3 nor #7 said
+who built it. Left alone it would have surfaced as Dev B blocked mid-#7 on a
+change only Dev A can make, at Wave 2, with Dev A on the critical path.
+
+It is now an acceptance criterion on **#4**, not #3. #3 is a pure static collider
+— `static CollisionResult TileCollider.Move(...)`, deliberately stateless for
+determinism — with no entity to snapshot; #4 is where the player entity is born.
+The case that bites is written into the AC: **teleports and spawns must set
+previous equal to current**, or a respawning player smears across the screen from
+wherever it died.
 
 ## Board mechanics for this sprint
 
