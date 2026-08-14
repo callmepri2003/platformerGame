@@ -18,3 +18,9 @@ csharp_style_namespace_declarations = file_scoped:error
 dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
 csharp_style_var_when_type_is_apparent = true:suggestion
 dotnet_diagnostic.IDE0055.severity = warning
+
+# Level maps are whitespace-significant: a space is a legal empty tile, so
+# stripping trailing spaces on save would silently shorten a line and the
+# loader would reject the file as ragged.
+[*.txt]
+trim_trailing_whitespace = false
